@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <X11/Xlib.h>
+#include "game.c"
 #include <X11/Xutil.h>
 #include <sys/mman.h>
 
@@ -28,8 +29,9 @@ int main() {
       return 1;
     }
 
-    int windowWidth = 1920;
-    int windowHeight = 1080;
+    windowBuffer windowBuffer;
+    windowBuffer.width = 1920;
+    windowBuffer.height = 1080;
 
     XSetWindowAttributes windowAttributes;
     windowAttributes.bit_gravity = StaticGravity;
@@ -38,7 +40,7 @@ int main() {
     windowAttributes.event_mask = StructureNotifyMask|KeyPressMask|KeyReleaseMask;
 
     unsigned long attributesMask = CWBitGravity|CWBackPixel|CWColormap|CWEventMask;
-    Window window = XCreateWindow(display, root, 0, 0, windowHeight, windowWidth,
+    Window window = XCreateWindow(display, root, 0, 0, windowBuffer.width, windowBuffer.height,
                                   0, visualInfo.depth, InputOutput,
                                   visualInfo.visual, attributesMask, &windowAttributes);
 
@@ -52,11 +54,11 @@ int main() {
     XMapWindow(display, window);
 
     int pixelBits = 32;
-    int bytesPerPixel = pixelBits / 8;
-    size_t windowBufferSize = windowWidth * windowHeight * bytesPerPixel;
-    char *memory = mmap(0, windowBufferSize, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-    XImage *xWindowBuffer = XCreateImage(display, visualInfo.visual, visualInfo.depth,
-                                          ZPixmap, 0, memory, windowWidth, windowHeight,
+    windowBuffer.bytesPerPixel = pixelBits / 8;
+    size_t windowBufferSize = windowBuffer.width * windowBuffer.height * windowBuffer.bytesPerPixel;
+    windowBuffer.memory = mmap(0, windowBufferSize, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+    windowBuffer.xImage = XCreateImage(display, visualInfo.visual, visualInfo.depth,
+                                          ZPixmap, 0, windowBuffer.memory, windowBuffer.width, windowBuffer.height,
                                           pixelBits, 0);
     GC graphicsContext = DefaultGC(display, defaultScreen);
 
@@ -81,12 +83,12 @@ int main() {
                 case ConfigureNotify: {
                     printf("configureNotify called\n");
                     XConfigureEvent *e = (XConfigureEvent *) &event;
-                    if (windowHeight == e->height && windowWidth == e->width) {
+                    if (windowBuffer.height == e->height && windowBuffer.width == e->width) {
                         break;
                     }
-                    windowWidth = e->width;
-                    windowHeight = e->height;
-                    windowSizeChanged = 1;
+                    windowBuffer.width = e->width;
+                    windowBuffer.height = e->height;
+                    windowBuffer.sizeChanged = 1;
                 } break;
                 case KeyPress: {
                     XKeyPressedEvent *e = (XKeyPressedEvent *) &event;
@@ -101,31 +103,20 @@ int main() {
             }
         }
 
-        if (windowSizeChanged) {
+        if (windowBuffer.sizeChanged) {
             printf("window size changed\n");
-            windowSizeChanged = 0;
-            munmap(memory, windowBufferSize);
-            windowBufferSize = windowWidth * windowHeight * bytesPerPixel;
-            memory = mmap(0, windowBufferSize, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
-            xWindowBuffer = XCreateImage(display, visualInfo.visual, visualInfo.depth,
-                                          ZPixmap, 0, memory, windowWidth, windowHeight,
+            windowBuffer.sizeChanged = 0;
+            munmap(windowBuffer.memory, windowBufferSize);
+            windowBufferSize = windowBuffer.width * windowBuffer.height * windowBuffer.bytesPerPixel;
+            windowBuffer.memory = mmap(0, windowBufferSize, PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+            windowBuffer.xImage = XCreateImage(display, visualInfo.visual, visualInfo.depth,
+                                          ZPixmap, 0, windowBuffer.memory, windowBuffer.width, windowBuffer.height,
                                           pixelBits, 0);
         }
 
-        int pitch = windowWidth * bytesPerPixel;
-        for (int y = 0; y < windowHeight; ++y) {
-            char *row = memory + (y * pitch);
-            for (int x = 0; x < windowWidth; ++x) {
-                uint32_t *p = (uint32_t *) (row + (x * bytesPerPixel));
-                if (x % 16 && y % 16) {
-                    *p = 0xffffffff;
-                } else {
-                    *p = 0;
-                }
-              }
-        }
+        gameUpdateAndRender(&windowBuffer);
 
-        XPutImage(display, window, graphicsContext, xWindowBuffer, 0, 0, 0, 0, windowWidth, windowHeight);
+        XPutImage(display, window, graphicsContext, windowBuffer.xImage, 0, 0, 0, 0, windowBuffer.width, windowBuffer.height);
     }
 
 
