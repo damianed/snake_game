@@ -4,6 +4,15 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <time.h>
+
+internal double getWallTime() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+
+    double seconds = (double)ts.tv_sec + ((double)ts.tv_nsec / (double)(1000.0*1000.0*1000.0));
+    return seconds;
+}
 
 int main() {
     printf("hello world\n");
@@ -28,7 +37,7 @@ int main() {
         return 1;
     }
 
-    windowBuffer windowBuffer;
+    WindowBuffer windowBuffer;
     windowBuffer.width = 1920;
     windowBuffer.height = 1080;
 
@@ -66,44 +75,56 @@ int main() {
     Atom wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XSetWMProtocols(display, window, &wm_delete_window, 1);
 
+    double startTime = getWallTime();
+    double deltaTime = 0;
+
     XEvent event;
     int windowSizeChanged = 0;
     int running = 1;
+    GameState gameState = STARTING_GAME_STATE;
     while (running) {
         while (XPending(display) > 0) {
             XNextEvent(display, &event);
             switch (event.type) {
-            case ClientMessage: {
-                if ((Atom)event.xclient.data.l[0] == wm_delete_window) {
-                    XDestroyWindow(event.xclient.display, event.xclient.window);
-                    running = 0;
-                }
-                break;
-            }
-            case ConfigureNotify: {
-                printf("configureNotify called\n");
-                XConfigureEvent *e = (XConfigureEvent *)&event;
-                if (windowBuffer.height == e->height && windowBuffer.width == e->width) {
+                case ClientMessage: {
+                    if ((Atom)event.xclient.data.l[0] == wm_delete_window) {
+                        XDestroyWindow(event.xclient.display, event.xclient.window);
+                        running = 0;
+                    }
                     break;
                 }
-                windowBuffer.width = e->width;
-                windowBuffer.height = e->height;
-                windowBuffer.sizeChanged = 1;
-            } break;
-            case KeyPress: {
-                XKeyPressedEvent *e = (XKeyPressedEvent *)&event;
-                if (e->keycode == XKeysymToKeycode(display, XK_w))
-                    printf("W\n");
-                if (e->keycode == XKeysymToKeycode(display, XK_l))
-                    printf("L\n");
-            } break;
-            case KeyRelease: {
-                XKeyReleasedEvent *e = (XKeyReleasedEvent *)&event;
-                if (e->keycode == XKeysymToKeycode(display, XK_w))
-                    printf("not W\n");
-                if (e->keycode == XKeysymToKeycode(display, XK_l))
-                    printf("not L\n");
-            } break;
+                case ConfigureNotify: {
+                    printf("configureNotify called\n");
+                    XConfigureEvent *e = (XConfigureEvent *)&event;
+                    if (windowBuffer.height == e->height && windowBuffer.width == e->width) {
+                        break;
+                    }
+                    windowBuffer.width = e->width;
+                    windowBuffer.height = e->height;
+                    windowBuffer.sizeChanged = 1;
+                } break;
+                case KeyPress: {
+                    XKeyPressedEvent *e = (XKeyPressedEvent *)&event;
+                    if (e->keycode == XKeysymToKeycode(display, XK_w)) {
+                        gameState.inputDirection = UP;
+                    }
+                    if (e->keycode == XKeysymToKeycode(display, XK_d)) {
+                        gameState.inputDirection = RIGHT;
+                    }
+                    if (e->keycode == XKeysymToKeycode(display, XK_s)) {
+                        gameState.inputDirection = DOWN;
+                    }
+                    if (e->keycode == XKeysymToKeycode(display, XK_a)) {
+                        gameState.inputDirection = LEFT;
+                    }
+                } break;
+                case KeyRelease: {
+                    XKeyReleasedEvent *e = (XKeyReleasedEvent *)&event;
+                    if (e->keycode == XKeysymToKeycode(display, XK_w))
+                        printf("not W\n");
+                    if (e->keycode == XKeysymToKeycode(display, XK_l))
+                        printf("not L\n");
+                } break;
             }
         }
 
@@ -118,9 +139,13 @@ int main() {
                                                pixelBits, 0);
         }
 
-        gameUpdateAndRender(&windowBuffer);
+        gameUpdateAndRender(&windowBuffer, &gameState, deltaTime);
 
         XPutImage(display, window, graphicsContext, windowBuffer.xImage, 0, 0, 0, 0, windowBuffer.width, windowBuffer.height);
+
+        double endTime = getWallTime();
+        deltaTime = endTime - startTime;
+        startTime = endTime;
     }
 
     return 0;
