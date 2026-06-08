@@ -5,17 +5,21 @@
 #include <stdio.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <unistd.h>
 
-internal double getWallTime() {
+internal float getWallTimeMs() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
 
-    double seconds = (double)ts.tv_sec + ((double)ts.tv_nsec / (double)(1000.0*1000.0*1000.0));
-    return seconds;
+    float seconds = (float)ts.tv_sec + ((float)ts.tv_nsec / (float)(1000.0*1000.0*1000.0));
+    return seconds * 1000.0f;
 }
 
 int main() {
-    printf("hello world\n");
+#define GAME_UPDATE_HZ 60
+
+    float targetMsPerFrame = 1000.0f / GAME_UPDATE_HZ;
+
     Display *display = XOpenDisplay(NULL);
     if (!display) {
         printf("Failed to initilize display\n");
@@ -75,8 +79,8 @@ int main() {
     Atom wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XSetWMProtocols(display, window, &wm_delete_window, 1);
 
-    double startTime = getWallTime();
-    double deltaTime = 0;
+    float startTimeMs = getWallTimeMs();
+    float deltaTimeMs = 0;
 
     XEvent event;
     int windowSizeChanged = 0;
@@ -118,18 +122,17 @@ int main() {
                         gameState.inputDirection = LEFT;
                     }
                 } break;
-                case KeyRelease: {
-                    XKeyReleasedEvent *e = (XKeyReleasedEvent *)&event;
-                    if (e->keycode == XKeysymToKeycode(display, XK_w))
-                        printf("not W\n");
-                    if (e->keycode == XKeysymToKeycode(display, XK_l))
-                        printf("not L\n");
-                } break;
+                //case KeyRelease: {
+                //    XKeyReleasedEvent *e = (XKeyReleasedEvent *)&event;
+                //    if (e->keycode == XKeysymToKeycode(display, XK_w))
+                //        printf("not W\n");
+                //    if (e->keycode == XKeysymToKeycode(display, XK_l))
+                //        printf("not L\n");
+                //} break;
             }
         }
 
         if (windowBuffer.sizeChanged) {
-            printf("window size changed\n");
             windowBuffer.sizeChanged = 0;
             munmap(windowBuffer.memory, windowBufferSize);
             windowBufferSize = windowBuffer.width * windowBuffer.height * windowBuffer.bytesPerPixel;
@@ -139,13 +142,24 @@ int main() {
                                                pixelBits, 0);
         }
 
-        gameUpdateAndRender(&windowBuffer, &gameState, deltaTime);
+        gameUpdateAndRender(&windowBuffer, &gameState, deltaTimeMs);
 
         XPutImage(display, window, graphicsContext, windowBuffer.xImage, 0, 0, 0, 0, windowBuffer.width, windowBuffer.height);
 
-        double endTime = getWallTime();
-        deltaTime = endTime - startTime;
-        startTime = endTime;
+        float endTimeMs = getWallTimeMs();
+        deltaTimeMs = endTimeMs - startTimeMs;
+        if (deltaTimeMs < targetMsPerFrame) {
+            uint32_t sleepMs = targetMsPerFrame - deltaTimeMs;
+            usleep(sleepMs * 1000.0f);
+        } else {
+            printf("target ms per frame missed! target: %f frameTime: %f \n", targetMsPerFrame, deltaTimeMs);
+        }
+
+        endTimeMs = getWallTimeMs();
+        deltaTimeMs = endTimeMs - startTimeMs;
+        startTimeMs = endTimeMs;
+        printf("target ms: %f delta time ms: %f\n", targetMsPerFrame, deltaTimeMs);
+        printf("FPS: %.2f\n", 1000.0f/deltaTimeMs);
     }
 
     return 0;

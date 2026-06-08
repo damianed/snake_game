@@ -17,7 +17,7 @@ typedef struct {
 #endif
 } WindowBuffer;
 
-typedef enum {UP, DOWN, LEFT, RIGHT} InputDirection;
+typedef enum {UP, DOWN, LEFT, RIGHT} Direction;
 
 typedef struct {
     float x;
@@ -25,10 +25,15 @@ typedef struct {
 } Position;
 
 typedef struct {
-    InputDirection inputDirection;
-    Position playerPos;
+    Position position;
+    Direction direction;
+} Player;
+
+typedef struct {
+    Player player;
+    Direction inputDirection;
 } GameState;
 
-#define STARTING_GAME_STATE {.inputDirection = RIGHT, .playerPos = {0, 16}}
+#define STARTING_GAME_STATE {.inputDirection = RIGHT, .player = {{0, 16}, RIGHT}}
 
-void gameUpdateAndRender(WindowBuffer *windowBuffer, GameState *input, double deltaTime);
+void gameUpdateAndRender(WindowBuffer *windowBuffer, GameState *input, float deltaTime);
