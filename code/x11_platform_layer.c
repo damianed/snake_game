@@ -158,7 +158,7 @@ int main() {
         endTimeMs = getWallTimeMs();
         deltaTimeMs = endTimeMs - startTimeMs;
         startTimeMs = endTimeMs;
-        printf("target ms: %f delta time ms: %f\n", targetMsPerFrame, deltaTimeMs);
+        //printf("target ms: %f delta time ms: %f\n", targetMsPerFrame, deltaTimeMs);
         printf("FPS: %.2f\n", 1000.0f/deltaTimeMs);
     }
 

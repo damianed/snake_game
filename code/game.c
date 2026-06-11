@@ -22,46 +22,95 @@ void drawGrid(WindowBuffer *windowBuffer) {
 }
 
 void updatePlayerPosition(GameState *gameState, int width, int height, float deltaTimeMs) {
-    float newX = gameState->player.position.x;
-    float newY = gameState->player.position.y;
+    Position oldPosition = gameState->player.position;
+    Position newPosition = gameState->player.position;
+    int prevXSquare = ((int)oldPosition.x) / SQUARE_SIZE;
+    int prevYSquare = ((int)oldPosition.y) / SQUARE_SIZE;
 
     switch (gameState->player.direction) {
         case UP: {
-            newY -= (SPEED * deltaTimeMs);
+            newPosition.y -= (SPEED * deltaTimeMs);
         } break;
         case RIGHT: {
-            newX += (SPEED * deltaTimeMs);
+            newPosition.x += (SPEED * deltaTimeMs);
         } break;
         case DOWN: {
-            newY += (SPEED * deltaTimeMs);
+            newPosition.y += (SPEED * deltaTimeMs);
         } break;
         case LEFT: {
-            newX -= (SPEED * deltaTimeMs);
+            newPosition.x -= (SPEED * deltaTimeMs);
         } break;
     }
 
     //TODO: allow travel from end/start of screen to start/end of screen
-    if (newX < 0) {
-        newX = 0;
-    } else if (newX + SQUARE_SIZE > width) {
-        newX = width - SQUARE_SIZE;
+    if (newPosition.x < 0) {
+        newPosition.x = 0;
+    } else if (newPosition.x + SQUARE_SIZE > width) {
+        newPosition.x = width - SQUARE_SIZE;
     }
 
-    if (newY < 0) {
-        newY = 0;
-    } else if (newY + SQUARE_SIZE > height) {
-        newY = height - SQUARE_SIZE;
+    if (newPosition.y < 0) {
+        newPosition.y = 0;
+    } else if (newPosition.y + SQUARE_SIZE > height) {
+        newPosition.y = height - SQUARE_SIZE;
     }
 
-    gameState->player.position.x = newX;
-    gameState->player.position.y = newY;
-
-    // TODO: this is a very bad way to do this because it only changes the direction if it happends to land right at the boundary
-    // of a square, which is not enforced in any way and makes it feel like input lag, I think a better way to do do this is to check if
-    // it crossed a square boundary with the last position update
-    //if (((int)gameState->player.position.x) % SQUARE_SIZE == 0 && ((int)gameState->player.position.y) % SQUARE_SIZE == 0) {
+    int changedDirection = gameState->player.direction != gameState->inputDirection;
+    //  Notes:
+    //  I think the best approach is to set a threshold and if is within that threshold of closeness to a square border then update
+    //  the direction and set the position to be exactly on the square so it douesn't go out of grid
+    //  we will need to handle each verticall and horizontal separatly, also I think if you move in the same axis the updates should be imediate
+    //  without checking
+    Direction playerDirection = gameState->player.direction;
+    Direction inputDirection = gameState->inputDirection;
+    // if same axis update without checking bounds
+    if ((playerDirection == UP && inputDirection == DOWN) || (playerDirection == DOWN && inputDirection == UP) ||
+       (playerDirection == LEFT && inputDirection == RIGHT) || (playerDirection == RIGHT && inputDirection == LEFT)) {
         gameState->player.direction = gameState->inputDirection;
-    //}
+    } else {
+        //TODO: think about a good threshold, I don't think multipling by dt is a
+        //good approach but I will leave it do remind me that the responsivness is
+        //affected by refreshrate, need to find a better way to handle this
+        const float threshold = 0.2 * deltaTimeMs;
+        int update = 0;
+        //float nextBoundary = -1;
+
+        int currentXSquare = ((int)newPosition.x) / SQUARE_SIZE;
+        int currentYSquare = ((int)newPosition.y) / SQUARE_SIZE;
+        switch (playerDirection) {
+            case RIGHT: {
+                float nextBoundary = currentXSquare * SQUARE_SIZE;
+                if (newPosition.x - nextBoundary <= threshold) {
+                    update = 1;
+                }
+            } break;
+            case LEFT: {
+                float nextBoundary = (currentXSquare + 1) * SQUARE_SIZE;
+                if (newPosition.x - nextBoundary <= threshold) {
+                    update = 1;
+                }
+            } break;
+            case UP: {
+                float nextBoundary = (currentYSquare + 1) * SQUARE_SIZE;
+                if (newPosition.y - nextBoundary <= threshold) {
+                    update = 1;
+                }
+            } break;
+            case DOWN: {
+                float nextBoundary = (currentYSquare) * SQUARE_SIZE;
+                if (newPosition.y - nextBoundary <= threshold) {
+                    update = 1;
+                }
+            } break;
+        }
+        if (update) {
+            // TODO: update location to be exactly inside of the square so we don't
+            // go out of the grid
+            gameState->player.direction = gameState->inputDirection;
+        }
+    }
+
+    gameState->player.position = newPosition;
 }
 
 void gameUpdateAndRender(WindowBuffer *windowBuffer, GameState *gameState, float deltaTimeMs) {
