@@ -15,6 +15,10 @@ internal float getWallTimeMs() {
     return seconds * 1000.0f;
 }
 
+typedef struct {
+//TODO
+} GameCode;
+
 int main() {
 #define GAME_UPDATE_HZ 60
 

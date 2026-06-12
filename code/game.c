@@ -113,7 +113,7 @@ void updatePlayerPosition(GameState *gameState, int width, int height, float del
     gameState->player.position = newPosition;
 }
 
-void gameUpdateAndRender(WindowBuffer *windowBuffer, GameState *gameState, float deltaTimeMs) {
+GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     drawGrid(windowBuffer);
 
     updatePlayerPosition(gameState, windowBuffer->width, windowBuffer->height, deltaTimeMs);
