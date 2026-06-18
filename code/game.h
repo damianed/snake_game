@@ -36,7 +36,5 @@ typedef struct {
 
 #define STARTING_GAME_STATE {.inputDirection = RIGHT, .player = {{0, 16}, RIGHT}}
 
-//void gameUpdateAndRender(WindowBuffer *windowBuffer, GameState *input, float deltaTime);
-
-#define GAME_UPDATE_AND_RENDER(name) void name(WindowBuffer *windowBuffer, GameState *input, float deltaTime)
+#define GAME_UPDATE_AND_RENDER(name) void name(WindowBuffer *windowBuffer, GameState *gameState, float deltaTime)
 typedef GAME_UPDATE_AND_RENDER(game_update_and_render);

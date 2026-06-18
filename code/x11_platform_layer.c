@@ -1,11 +1,14 @@
 #include "game.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-#include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+#include <dlfcn.h>
+#include <sys/stat.h>
 
 internal float getWallTimeMs() {
     struct timespec ts;
@@ -15,9 +18,54 @@ internal float getWallTimeMs() {
     return seconds * 1000.0f;
 }
 
+internal long getLastModifiedTime(char *filePath) {
+    struct stat fileInfo;
+    if (stat(filePath, &fileInfo) == -1) {
+        return 0;
+    }
+
+    return fileInfo.st_mtime;
+}
+
 typedef struct {
-//TODO
+    void *soLibrary;
+    game_update_and_render *updateAndRender;
+    long lastModifiedTime;
+    bool isValid;
 } GameCode;
+
+internal GameCode loadGameCode(char *SOPath) {
+    GameCode result = {0};
+
+    result.soLibrary = dlopen(SOPath, RTLD_LAZY);
+    if (result.soLibrary) {
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wpedantic"
+        result.updateAndRender = (game_update_and_render *) dlsym(result.soLibrary, "gameUpdateAndRender");
+        #pragma GCC diagnostic pop
+
+        if (result.updateAndRender)  {
+            result.lastModifiedTime = getLastModifiedTime(SOPath);
+            result.isValid = true;
+        }
+    }
+
+    if (!result.isValid) {
+        result.updateAndRender = 0;
+    }
+
+    return result;
+}
+
+internal void unloadGameCode(GameCode *gameCode) {
+    if (gameCode->soLibrary) {
+        dlclose(gameCode->soLibrary);
+        gameCode->soLibrary = 0;
+    }
+
+    gameCode->isValid = false;
+    gameCode->updateAndRender = 0;
+}
 
 int main() {
 #define GAME_UPDATE_HZ 60
@@ -83,6 +131,9 @@ int main() {
     Atom wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", 0);
     XSetWMProtocols(display, window, &wm_delete_window, 1);
 
+    char *gameSOPath =  "./game.so";
+    GameCode gameCode = loadGameCode(gameSOPath);
+
     float startTimeMs = getWallTimeMs();
     float deltaTimeMs = 0;
 
@@ -91,6 +142,13 @@ int main() {
     int running = 1;
     GameState gameState = STARTING_GAME_STATE;
     while (running) {
+        if (gameCode.lastModifiedTime != getLastModifiedTime(gameSOPath)) {
+            if (access(gameSOPath, X_OK) != -1) {
+                unloadGameCode(&gameCode);
+                gameCode = loadGameCode(gameSOPath);
+            }
+        }
+
         while (XPending(display) > 0) {
             XNextEvent(display, &event);
             switch (event.type) {
@@ -146,7 +204,7 @@ int main() {
                                                pixelBits, 0);
         }
 
-        gameUpdateAndRender(&windowBuffer, &gameState, deltaTimeMs);
+        gameCode.updateAndRender(&windowBuffer, &gameState, deltaTimeMs);
 
         XPutImage(display, window, graphicsContext, windowBuffer.xImage, 0, 0, 0, 0, windowBuffer.width, windowBuffer.height);
 

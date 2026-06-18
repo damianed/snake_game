@@ -116,7 +116,7 @@ void updatePlayerPosition(GameState *gameState, int width, int height, float del
 GAME_UPDATE_AND_RENDER(gameUpdateAndRender) {
     drawGrid(windowBuffer);
 
-    updatePlayerPosition(gameState, windowBuffer->width, windowBuffer->height, deltaTimeMs);
+    updatePlayerPosition(gameState, windowBuffer->width, windowBuffer->height, deltaTime);
 
     int playerX = gameState->player.position.x;
     int playerY = gameState->player.position.y;
